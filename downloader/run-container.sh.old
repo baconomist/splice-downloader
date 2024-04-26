@@ -1,6 +1,5 @@
 # sudo docker run --rm spliceaudiorecorder /bin/bash
-echo "ARG $1"
-sudo docker run --rm -v $(pwd)/out:/out spliceaudiorecorder /bin/bash -c "./run.sh $1"
+docker run --rm -v $(pwd)/out:/out spliceaudiorecorder /bin/bash -c "./run.sh $1"
 
 # -it
 # --rm -c "./run.sh"

@@ -1,2 +1,0 @@
-cd ./scraper
-npm install

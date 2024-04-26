@@ -1,4 +1,4 @@
-sudo docker build . -t spliceaudiorecorder 
+docker build . -t spliceaudiorecorder 
 
 
 # --progress=plain --no-cache 

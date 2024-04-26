@@ -37,8 +37,6 @@ RUN apt-get update && apt-get install gnupg wget -y && \
 
 
 # CODE STUFF
-
-COPY ./install-scraper.sh .
 COPY ./run.sh .
 
 RUN chmod +x ./run.sh
@@ -46,8 +44,9 @@ RUN chmod +x ./run.sh
 RUN mkdir scraper
 COPY ./scraper ./scraper
   
-RUN chmod +x install-scraper.sh
-RUN ./install-scraper.sh
+WORKDIR scraper
+RUN npm install
+WORKDIR /
 
 COPY entrypoint.sh /opt/bin/entrypoint.sh
 RUN chmod +x /opt/bin/entrypoint.sh

@@ -4,6 +4,7 @@ import { spawnSync, execSync, exec } from 'child_process'
 import * as id3 from 'node-id3'
 
 async function downloadPack(packUrl: string) {
+    console.log("Downloading Pack...")
     const [browser, page] = await launchBrowser({ withProxy: false, optimized: false, args: ['--use-fake-ui-for-media-stream'], ignoreDefaultArgs: ['--mute-audio'], headless: false })
 
     async function inner(pageNumber = 1) {
@@ -40,13 +41,22 @@ async function downloadPack(packUrl: string) {
 }
 
 async function downloadSample(sampleUrl: string) {
+    console.log("Downloading Sample...")
     let success = false
     let done = false
-    exec(`./run-container.sh ${sampleUrl}`, { encoding: 'utf8' }, (err, stdout, stderr) => {
+
+    function onExecComplete(err, stdout, stderr) {
         success = !err
         done = true
         console.log("OUTPUT:", err, stdout, stderr)
-    })
+    }
+
+    if (process.platform == 'win32') {
+        exec(`docker run --rm -v %pwd%/out:/out spliceaudiorecorder /bin/bash -c "./run.sh ${sampleUrl}"`, onExecComplete)
+    }
+    else{
+        exec(`docker run --rm -v $(pwd)/out:/out spliceaudiorecorder /bin/bash -c "./run.sh ${sampleUrl}"`, onExecComplete)
+    }
 
     while (!done) { await new Promise(r => setTimeout(r, 1)) }
 
@@ -58,8 +68,21 @@ async function downloadSample(sampleUrl: string) {
 
 (async () => {
     // TODO: require to run this as SUDO
-    // await downloadSample('https://splice.com/sounds/sample/2ddb9b4c76074cb1c648a85959206aa54e2893a493ea8cd2ab50b1f0bdf29786')
-    await downloadPack('https://splice.com/sounds/packs/sample-magic/house-nation-2/samples')
+
+    const url = process.argv[2]
+
+    if (!url) throw new Error("Invalid args! Usage: downloader packUrl or downloader sampleUrl")
+
+    const isPack = url.includes('pack')
+
+    if (isPack) {
+        // 'https://splice.com/sounds/packs/sample-magic/house-nation-2/samples'
+        await downloadPack(url)
+    }
+    else {
+        // await downloadSample('https://splice.com/sounds/sample/2ddb9b4c76074cb1c648a85959206aa54e2893a493ea8cd2ab50b1f0bdf29786')
+        await downloadSample(url)
+    }
 
     process.exit(1)
 
