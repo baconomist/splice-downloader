@@ -1,7 +1,10 @@
+import glob from "glob"
 import { Page } from "puppeteer"
 import { getAllCssSelectorsFromDom, getCssSelectorFromDom, launchBrowser, scrollElemIntoView, scrollIntoView, waitForCssSelectorFromDom } from "./utils"
 import { spawnSync, execSync, exec } from 'child_process'
 import * as id3 from 'node-id3'
+import path from "path"
+import fs from "fs"
 
 async function downloadPack(packUrl: string) {
     console.log("Downloading Pack...")
@@ -66,6 +69,12 @@ async function downloadSample(sampleUrl: string) {
     }
 }
 
+function getMostRecentFileName(dir) {
+    return glob.sync(`${dir}/*mp3`)
+    .map(name => ({name, ctime: fs.statSync(name).ctime}))
+    .sort((a, b) => b.ctime - a.ctime)[0].name
+}
+
 (async () => {
     // TODO: require to run this as SUDO
 
@@ -83,6 +92,9 @@ async function downloadSample(sampleUrl: string) {
         // await downloadSample('https://splice.com/sounds/sample/2ddb9b4c76074cb1c648a85959206aa54e2893a493ea8cd2ab50b1f0bdf29786')
         await downloadSample(url)
     }
+
+    const mostRecentFile = getMostRecentFileName("./out")
+    exec(`ffmpeg -i ./out/${mostRecentFile} -af "silenceremove=start_periods=1:start_duration=1:start_threshold=-60dB:detection=peak,aformat=dblp,areverse,silenceremove=start_periods=1:start_duration=1:start_threshold=-60dB:detection=peak,aformat=dblp,areverse" ./out/${mostRecentFile}`)
 
     process.exit(1)
 
