@@ -69,7 +69,7 @@ async function downloadSample(sampleUrl: string) {
     }
 }
 
-function getMostRecentFileName(dir) {
+function getMostRecentFile(dir) {
     return glob.sync(`${dir}/*mp3`)
     .map(name => ({name, ctime: fs.statSync(name).ctime}))
     .sort((a, b) => b.ctime - a.ctime)[0].name
@@ -93,8 +93,18 @@ function getMostRecentFileName(dir) {
         await downloadSample(url)
     }
 
-    const mostRecentFile = getMostRecentFileName("./out")
-    exec(`ffmpeg -i ./out/${mostRecentFile} -af "silenceremove=start_periods=1:start_duration=1:start_threshold=-60dB:detection=peak,aformat=dblp,areverse,silenceremove=start_periods=1:start_duration=1:start_threshold=-60dB:detection=peak,aformat=dblp,areverse" ./out/${mostRecentFile}`)
+    const mostRecentFile = getMostRecentFile("./out")
+    const trimCmd = `ffmpeg -i ${mostRecentFile} -af silenceremove=1:0:-50dB ${mostRecentFile.replace(".mp3", '').replace(".wav", '')}_trimmed.mp3`
+    console.log(trimCmd)
+
+    let done = false
+
+    exec(trimCmd, (err, stdout, stderr) => {
+        done = true
+        console.log("OUTPUT:", err, stdout, stderr)
+    })
+
+    while (!done) { await new Promise(r => setTimeout(r, 1)) }
 
     process.exit(1)
 
