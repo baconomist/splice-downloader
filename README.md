@@ -15,3 +15,11 @@
 ## DISCLAIMER
 This tool is only for educational purposes and should be used in accordance with applicable laws.
 I do not bear any responsibility for misuse of this tool and/or damages caused via copyright infringement.
+
+
+## DONATIONS
+
+If you've got spare change, any donations would be greatly appreciated :)
+
+**Monereo Wallet:**
+`4AAkqVtvaKP6gE7V3FJ99qJ8svT3CC5HeKHtAzECJB63UdQGEW9Zmnc9YCBtiq2PTfSVkLtScnBYWBPhiNMVVfw8QDHPgpQ`
