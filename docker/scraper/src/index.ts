@@ -2,6 +2,7 @@ import { Page } from "puppeteer"
 import { getAllCssSelectorsFromDom, getCssSelectorFromDom, launchBrowser, waitForCssSelectorFromDom } from "./utils"
 import { spawn } from "child_process"
 import * as id3 from "node-id3"
+import * as cheerio from "cheerio"
 
 // const OUTPUT_DIR = '../../out'
 // const EXECUTABLE_PATH = undefined
@@ -15,31 +16,32 @@ async function downloadSample(page: Page, sampleUrl: string) {
     await page.goto(sampleUrl)
 
     let title = null
-    try {
-        await page.waitForSelector("h1.title", { timeout: 2000 })
-        title = await page.$eval("h1.title", (e) => e.innerHTML)
-    } catch (e) {
-        console.warn(e)
+    const htmlContent = await page.content()
 
-        await page.waitForSelector("h3.title", { timeout: 2000 })
-        title = await page.$eval("h3.title", (e) => e.innerHTML)
-    }
+    const parser = cheerio.load(htmlContent)
+
+    title = parser(parser('[class^="title "]')[0]).text()
 
     // Bpm can be null for kicks etc
     let bpm
     try {
-        bpm = await page.$eval('div[data-qa="sound-details.bpm"]', (e) => e.innerHTML)
+        bpm = parser(parser("*").filter((i, el) => {
+            return parser(el).text().toLocaleLowerCase() == "bpm"
+        })[0].parent.lastChild).text()
         console.log("BPM:", bpm)
     } catch (e) {}
 
-    const author = await page.$eval('a[data-qa="sound-details.provider"', (e) => e.innerHTML)
-    const samplePack = await page.$eval('a[data-qa="sound-details.pack"', (e) => e.innerHTML)
+    const samplePack = parser(parser(".subheading").children('a')[0]).text()
+    const author = parser(parser(".subheading").children('a')[1]).text()
+    
+    console.log(`Sample info: Title: ${title} Bpm: ${bpm} Pack: ${samplePack} Author: ${author}`)
 
     // const key =
     // const tags = await page.$eval('sp-tags', e => e.)
 
     const [recordingHandle, filePath] = startRecording(title)
 
+    await page.waitForNetworkIdle()
     const selector = await getCssSelectorFromDom(
         page,
         "span",
@@ -89,8 +91,8 @@ function stopRecording(recordingHandle, filePath, metaData) {
 }
 
 ;(async () => {
-    const [browser, page] = await launchBrowser({ withProxy: false, optimized: false, headless: false })
-    // const [browser, page] = await launchBrowser({ withProxy: false, optimized: false, args: ['--use-fake-ui-for-media-stream'], ignoreDefaultArgs: ['--mute-audio'], headless: "new", executablePath: EXECUTABLE_PATH })
+    // const [browser, page] = await launchBrowser({ withProxy: false, optimized: false, headless: false })
+    const [browser, page] = await launchBrowser({ withProxy: false, optimized: false, args: ['--use-fake-ui-for-media-stream'], ignoreDefaultArgs: ['--mute-audio'], headless: "new", executablePath: EXECUTABLE_PATH })
 
     await downloadSample(page, process.argv[2])
 

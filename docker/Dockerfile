@@ -45,7 +45,8 @@ RUN mkdir scraper
 COPY ./scraper ./scraper
   
 WORKDIR scraper
-RUN npm install
+# TODO: configure docker ignore to remove node modules
+# RUN npm install
 WORKDIR /
 
 COPY entrypoint.sh /opt/bin/entrypoint.sh
