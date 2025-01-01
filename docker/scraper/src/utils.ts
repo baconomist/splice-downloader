@@ -1,5 +1,8 @@
-import puppeteer, { Browser, Page } from "puppeteer";
-import p from "puppeteer-core"
+import { Browser, Page } from "puppeteer"
+import puppeteer from "puppeteer-extra"
+
+const StealthPlugin = require('puppeteer-extra-plugin-stealth');
+puppeteer.use(StealthPlugin());
 
 export async function launchBrowser({ withProxy = true, optimized = true, args = [], ignoreDefaultArgs = [], headless = null, executablePath = undefined }): Promise<[Browser, Page]> {
 

@@ -14,6 +14,7 @@ async function downloadSample(page: Page, sampleUrl: string) {
     // const sampleUrl = 'https://splice.com/sounds/sample/2ddb9b4c76074cb1c648a85959206aa54e2893a493ea8cd2ab50b1f0bdf29786'
     // const sampleUrl = 'https://splice.com/sounds/sample/7e830523e0fa1e64e5ef2487fe8c07cfa577a60cd5362249105d8c45978c88c0'
     await page.goto(sampleUrl)
+    await page.waitForNetworkIdle({ idleTime: 1000 })
 
     let title = null
     const htmlContent = await page.content()
@@ -25,15 +26,17 @@ async function downloadSample(page: Page, sampleUrl: string) {
     // Bpm can be null for kicks etc
     let bpm
     try {
-        bpm = parser(parser("*").filter((i, el) => {
-            return parser(el).text().toLocaleLowerCase() == "bpm"
-        })[0].parent.lastChild).text()
+        bpm = parser(
+            parser("*").filter((i, el) => {
+                return parser(el).text().toLocaleLowerCase() == "bpm"
+            })[0].parent.lastChild
+        ).text()
         console.log("BPM:", bpm)
     } catch (e) {}
 
-    const samplePack = parser(parser(".subheading").children('a')[0]).text()
-    const author = parser(parser(".subheading").children('a')[1]).text()
-    
+    const samplePack = parser(parser(".subheading").children("a")[0]).text()
+    const author = parser(parser(".subheading").children("a")[1]).text()
+
     console.log(`Sample info: Title: ${title} Bpm: ${bpm} Pack: ${samplePack} Author: ${author}`)
 
     // const key =
@@ -41,7 +44,7 @@ async function downloadSample(page: Page, sampleUrl: string) {
 
     const [recordingHandle, filePath] = startRecording(title)
 
-    await page.waitForNetworkIdle()
+    await page.waitForNetworkIdle({ idleTime: 1000 })
     const selector = await getCssSelectorFromDom(
         page,
         "span",
@@ -50,7 +53,7 @@ async function downloadSample(page: Page, sampleUrl: string) {
     )
     await page.click(selector)
 
-    const progressSelector = 'progress[class="progress-bar hidden-background"]'
+    const progressSelector = 'progress[class*="progress-bar"]'
     await page.waitForSelector(progressSelector)
 
     // Progress bar resets back to 0 when sample finished playing
@@ -92,7 +95,7 @@ function stopRecording(recordingHandle, filePath, metaData) {
 
 ;(async () => {
     // const [browser, page] = await launchBrowser({ withProxy: false, optimized: false, headless: false })
-    const [browser, page] = await launchBrowser({ withProxy: false, optimized: false, args: ['--use-fake-ui-for-media-stream'], ignoreDefaultArgs: ['--mute-audio'], headless: "new", executablePath: EXECUTABLE_PATH })
+    const [browser, page] = await launchBrowser({ withProxy: false, optimized: false, args: ["--use-fake-ui-for-media-stream"], ignoreDefaultArgs: ["--mute-audio"], headless: "new", executablePath: EXECUTABLE_PATH })
 
     await downloadSample(page, process.argv[2])
 

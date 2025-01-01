@@ -21,10 +21,9 @@ async function downloadPack(packUrl: string) {
         const numSamplesOnPage = sampleLinks.length
 
         for (const link of sampleLinks) {
-            const sampleUrl = await link.evaluate(el => el.href);
+            const sampleUrl = await link.evaluate((el) => el.href)
             console.log(sampleUrl)
             sampleUrls.push(sampleUrl)
-            await new Promise(r => setTimeout(r, 10000000))
         }
 
         // This means it's the last page
@@ -84,25 +83,8 @@ function getMostRecentFile(dir) {
         .sort((a, b) => b.ctime - a.ctime)[0].name
 }
 
-;(async () => {
-    // TODO: require to run this as SUDO
-
-    const url = process.argv[2]
-
-    if (!url) throw new Error("Invalid args! Usage: downloader packUrl or downloader sampleUrl")
-
-    const isPack = url.includes("pack")
-
-    if (isPack) {
-        // 'https://splice.com/sounds/packs/sample-magic/house-nation-2/samples'
-        await downloadPack(url)
-    } else {
-        // await downloadSample('https://splice.com/sounds/sample/2ddb9b4c76074cb1c648a85959206aa54e2893a493ea8cd2ab50b1f0bdf29786')
-        await downloadSample(url)
-    }
-
-    const mostRecentFile = getMostRecentFile("./out")
-    const trimCmd = `ffmpeg -i ${mostRecentFile} -af silenceremove=1:0:-50dB ${mostRecentFile.replace(".mp3", "").replace(".wav", "")}_trimmed.mp3`
+async function postProcessFile(filePath: string) {
+    const trimCmd = `ffmpeg -i ${filePath} -af silenceremove=1:0:-50dB ${filePath.replace(".mp3", "").replace(".wav", "")}_trimmed.mp3`
     console.log(trimCmd)
 
     let done = false
@@ -118,7 +100,7 @@ function getMostRecentFile(dir) {
 
     let done2 = false
 
-    const rmOriginalFileCmd = `rm -rf ${mostRecentFile}`
+    const rmOriginalFileCmd = `rm -rf ${filePath}`
     exec(rmOriginalFileCmd, (err, stdout, stderr) => {
         done2 = true
         console.log("OUTPUT:", err, stdout, stderr)
@@ -126,6 +108,36 @@ function getMostRecentFile(dir) {
 
     while (!done2) {
         await new Promise((r) => setTimeout(r, 1))
+    }
+}
+
+;(async () => {
+    // TODO: require to run this as SUDO
+
+    const url = process.argv[2]
+
+    if (!url) throw new Error("Invalid args! Usage: downloader packUrl or downloader sampleUrl")
+
+    const isPack = url.includes("pack")
+
+    if (isPack) {
+        // 'https://splice.com/sounds/packs/sample-magic/house-nation-2/samples'
+        await downloadPack(url)
+
+        const files = glob.sync(`./out/*mp3`)
+
+        const promises = []
+        for (const file of files) {
+            if (file.includes("_trimmed")) continue
+            promises.push(postProcessFile(file))
+        }
+        await Promise.all(promises)
+    } else {
+        // await downloadSample('https://splice.com/sounds/sample/2ddb9b4c76074cb1c648a85959206aa54e2893a493ea8cd2ab50b1f0bdf29786')
+        await downloadSample(url)
+
+        const mostRecentFile = getMostRecentFile("./out")
+        await postProcessFile(mostRecentFile)
     }
 
     process.exit(1)
