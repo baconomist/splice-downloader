@@ -116,6 +116,18 @@ function getMostRecentFile(dir) {
         await new Promise((r) => setTimeout(r, 1))
     }
 
+    let done2 = false
+
+    const rmOriginalFileCmd = `rm -rf ${mostRecentFile}`
+    exec(rmOriginalFileCmd, (err, stdout, stderr) => {
+        done2 = true
+        console.log("OUTPUT:", err, stdout, stderr)
+    })
+
+    while (!done2) {
+        await new Promise((r) => setTimeout(r, 1))
+    }
+
     process.exit(1)
 
     // await new Promise(r => setTimeout(r, 99999))
