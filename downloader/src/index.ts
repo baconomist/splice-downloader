@@ -37,12 +37,13 @@ async function downloadPack(packUrl: string) {
 
     await browser.close()
 
+    const NUM_PROCS = 7
     let runningProcs = []
     for (const sampleUrl of sampleUrls) {
         runningProcs.push(downloadSample(sampleUrl))
-        if (runningProcs.length >= 5) {
-            await Promise.all(runningProcs)
-            runningProcs = []
+        if (runningProcs.length >= NUM_PROCS) {
+            const first = await Promise.race(runningProcs)
+            runningProcs.splice(runningProcs.indexOf(first), 1)
         }
     }
 
@@ -84,7 +85,19 @@ function getMostRecentFile(dir) {
 }
 
 async function postProcessFile(filePath: string) {
-    const trimCmd = `ffmpeg -i ${filePath} -af silenceremove=1:0:-50dB ${filePath.replace(".mp3", "").replace(".wav", "")}_trimmed.mp3`
+    let doneMv = false
+
+    const createTmpFileCMD = `mv ${filePath} ${filePath}_tmp.mp3`
+    exec(createTmpFileCMD, (err, stdout, stderr) => {
+        doneMv = true
+        console.log("OUTPUT:", err, stdout, stderr)
+    })
+
+    while (!doneMv) {
+        await new Promise((r) => setTimeout(r, 1))
+    }
+
+    const trimCmd = `ffmpeg -y -i ${filePath}_tmp.mp3 -af silenceremove=1:0:-35dB ${filePath.replace(".mp3", "").replace(".wav", "")}.mp3`
     console.log(trimCmd)
 
     let done = false
@@ -100,7 +113,7 @@ async function postProcessFile(filePath: string) {
 
     let done2 = false
 
-    const rmOriginalFileCmd = `rm -rf ${filePath}`
+    const rmOriginalFileCmd = `rm -rf ${filePath}_tmp.mp3`
     exec(rmOriginalFileCmd, (err, stdout, stderr) => {
         done2 = true
         console.log("OUTPUT:", err, stdout, stderr)
