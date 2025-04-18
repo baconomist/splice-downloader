@@ -62,7 +62,7 @@ async function downloadSample(sampleUrl: string) {
     }
 
     if (process.platform == "win32") {
-        exec(`docker run --rm -v %pwd%/out:/out spliceaudiorecorder /bin/bash -c "./run.sh ${sampleUrl}"`, onExecComplete)
+        exec(`docker run --rm -v "%cd%\\out:/out" spliceaudiorecorder /bin/bash -c "./run.sh ${sampleUrl}"`, onExecComplete)
     } else {
         exec(`docker run --rm -v $(pwd)/out:/out spliceaudiorecorder /bin/bash -c "./run.sh ${sampleUrl}"`, onExecComplete)
     }
@@ -84,26 +84,14 @@ function getMostRecentFile(dir) {
         .sort((a, b) => b.ctime - a.ctime)[0].name
 }
 
-async function postProcessFile(filePath: string) {
-    let doneMv = false
-
-    const createTmpFileCMD = `mv ${filePath} ${filePath}_tmp.mp3`
-    exec(createTmpFileCMD, (err, stdout, stderr) => {
-        doneMv = true
-        console.log("OUTPUT:", err, stdout, stderr)
-    })
-
-    while (!doneMv) {
-        await new Promise((r) => setTimeout(r, 1))
-    }
-
-    const trimCmd = `ffmpeg -y -i ${filePath}_tmp.mp3 -af silenceremove=1:0:-35dB ${filePath.replace(".mp3", "").replace(".wav", "")}.mp3`
-    console.log(trimCmd)
-
+async function execAndWaitForCMD(cmd: string): Promise<string> {
     let done = false
 
-    exec(trimCmd, (err, stdout, stderr) => {
+    console.log("Executing: ", cmd)
+    let output = undefined
+    exec(cmd, (err, stdout, stderr) => {
         done = true
+        output = stdout
         console.log("OUTPUT:", err, stdout, stderr)
     })
 
@@ -111,16 +99,32 @@ async function postProcessFile(filePath: string) {
         await new Promise((r) => setTimeout(r, 1))
     }
 
-    let done2 = false
+    return output.trim()
+}
 
-    const rmOriginalFileCmd = `rm -rf ${filePath}_tmp.mp3`
-    exec(rmOriginalFileCmd, (err, stdout, stderr) => {
-        done2 = true
-        console.log("OUTPUT:", err, stdout, stderr)
-    })
+async function postProcessFile(filePath: string) {
+    // CONVERT TO WAV CUS FUCKING MP3 ALWAYS HAS LIKE 2ms of start silence FFUCK MP3
+    const tmpFilePath = `${filePath}_tmp.wav`
+    const tmpNormalizedFilePath = `${filePath}_tmp_normalized.wav`
+    const outputFilePath = `${filePath.replace(".mp3", "").replace(".wav", "")}.wav`
 
-    while (!done2) {
-        await new Promise((r) => setTimeout(r, 1))
+    const createTmpFileCMD = `mv ${filePath} ${tmpFilePath}`
+    await execAndWaitForCMD(createTmpFileCMD)
+
+    let dbLevel = await execAndWaitForCMD(`powershell.exe -ExecutionPolicy Bypass -File ./getMaxVolume.ps1 -InputPath "${tmpFilePath}"`)
+    const positiveDB = dbLevel.replace("-", "")
+    console.log("DB LEVEL:", positiveDB)
+
+    const normalizeCMD = `ffmpeg -i ${tmpFilePath} -filter:a "volume=${positiveDB}" ${tmpNormalizedFilePath} -f null NUL`
+    await execAndWaitForCMD(normalizeCMD)
+
+    const trimSilenceCMD = `ffmpeg -y -i ${tmpNormalizedFilePath} -af silenceremove=1:0:-40dB ${outputFilePath}`
+    await execAndWaitForCMD(trimSilenceCMD)
+
+    const filesToCleanUp = [tmpFilePath, tmpNormalizedFilePath]
+
+    for (const file of filesToCleanUp) {
+        await execAndWaitForCMD(`rm -rf ${file}`)
     }
 }
 

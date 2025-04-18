@@ -23,3 +23,11 @@ If you've got spare change, any donations would be greatly appreciated :)
 
 **Monereo Wallet:**
 `4AAkqVtvaKP6gE7V3FJ99qJ8svT3CC5HeKHtAzECJB63UdQGEW9Zmnc9YCBtiq2PTfSVkLtScnBYWBPhiNMVVfw8QDHPgpQ`
+
+
+## TODO:
+- skip already downloaded files
+- fix url ?page= so that you can paste in pack links w/ search queries
+- instantly trim audio after each individual sample download from the pack --> move audio trimming into docker container
+- show progress % for pack download
+- argv: --num-procs x --> for # of parallel
