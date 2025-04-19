@@ -6,6 +6,8 @@ import * as id3 from "node-id3"
 import path from "path"
 import fs from "fs"
 
+const ABLETON_DIR = `C:\\Users\\Lucas\\Documents\\Ableton\\User Library\\Samples\\Splice`
+
 async function downloadPack(packUrl: string) {
     console.log("Downloading Pack...")
     const [browser, page] = await launchBrowser({ withProxy: false, optimized: false, args: ["--use-fake-ui-for-media-stream"], ignoreDefaultArgs: ["--mute-audio"], headless: false })
@@ -127,26 +129,51 @@ async function postProcessFile(filePath: string) {
     for (const file of filesToCleanUp) {
         await execAndWaitForCMD(`rm -rf ${file}`)
     }
+
+    const outDest = outDir ?? ABLETON_DIR
+
+    if (!outDest) {
+        fs.mkdirSync(outDest)
+    }
+
+    await execAndWaitForCMD(`cp ${outputFilePath} "${path.join(outDest, path.basename(outputFilePath))}"`)
 }
 
+let outDir = undefined
 ;(async () => {
     // TODO: require to run this as SUDO
 
     const url = process.argv[2]
+    outDir = process.argv[3]
 
     if (!url) throw new Error("Invalid args! Usage: downloader packUrl or downloader sampleUrl")
 
     const isPack = url.includes("pack")
 
     if (isPack) {
+        
+        await execAndWaitForCMD(`rm -rf ./out`)
+        await execAndWaitForCMD(`mkdir ./out`)
+
         // 'https://splice.com/sounds/packs/sample-magic/house-nation-2/samples'
+
+        const artistName = url.split("/")[5]
+        const packName = url.split("/")[6]
+        console.log("ARTIST NAME:", packName)
+        console.log("PACK NAME:", packName)
+        
+        if (!outDir) {
+            outDir = path.join(ABLETON_DIR, artistName, packName)
+        }
+
+        console.log("OUT DIR:", outDir)
+
         await downloadPack(url)
 
         const files = glob.sync(`./out/*mp3`)
 
         const promises = []
         for (const file of files) {
-            if (file.includes("_trimmed")) continue
             promises.push(postProcessFile(file))
         }
         await Promise.all(promises)
