@@ -118,7 +118,8 @@ async function postProcessFile(filePath: string) {
     const normalizeCMD = `ffmpeg -i ${tmpFilePath} -filter:a "volume=${positiveDB}" ${tmpNormalizedFilePath} -f null NUL`
     await execAndWaitForCMD(normalizeCMD)
 
-    const trimSilenceCMD = `ffmpeg -y -i ${tmpNormalizedFilePath} -af silenceremove=1:0:-40dB ${outputFilePath}`
+    // const trimSilenceCMD = `ffmpeg -y -i ${tmpNormalizedFilePath} -af silenceremove=1:0:-50dB ${outputFilePath}`
+    const trimSilenceCMD = `ffmpeg -y -i ${tmpNormalizedFilePath} -af silenceremove=start_periods=1:start_duration=0.1:start_threshold=-50dB ${outputFilePath}`
     await execAndWaitForCMD(trimSilenceCMD)
 
     const filesToCleanUp = [tmpFilePath, tmpNormalizedFilePath]
