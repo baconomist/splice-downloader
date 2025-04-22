@@ -39,10 +39,10 @@ async function downloadPack(packUrl: string) {
 
     await browser.close()
 
-    const NUM_PROCS = 7
+    const NUM_PROCS = 1
     let runningProcs = []
     for (const sampleUrl of sampleUrls) {
-        runningProcs.push(downloadSample(sampleUrl))
+        runningProcs.push(downloadAndPostProcessSample(sampleUrl))
         if (runningProcs.length >= NUM_PROCS) {
             const first = await Promise.race(runningProcs)
             runningProcs.splice(runningProcs.indexOf(first), 1)
@@ -52,10 +52,21 @@ async function downloadPack(packUrl: string) {
     await Promise.all(runningProcs)
 }
 
-async function downloadSample(sampleUrl: string) {
+type SampleData = { audioFilePath: string; metaData: { title: string; artist: string } & any }
+
+async function downloadAndPostProcessSample(sampleUrl: string) {
+    const downloadedSample = await downloadSample(sampleUrl)
+    await postProcessSample(downloadedSample)
+}
+
+async function downloadSample(sampleUrl: string): Promise<SampleData> {
     console.log("Downloading Sample...")
     let success = false
     let done = false
+
+    const sampleId = sampleUrl.replace("//", "/").split("/")[4]
+    const outputAudioPath = `./out/${sampleId}.wav`
+    const outputMetaFilePath = `./out/${sampleId}.wav.json`
 
     function onExecComplete(err, stdout, stderr) {
         success = !err
@@ -77,13 +88,13 @@ async function downloadSample(sampleUrl: string) {
         console.log(`Retrying for sample ${sampleUrl}`)
         return downloadSample(sampleUrl)
     }
-}
 
-function getMostRecentFile(dir) {
-    return glob
-        .sync(`${dir}/*mp3`)
-        .map((name) => ({ name, ctime: fs.statSync(name).ctime }))
-        .sort((a, b) => b.ctime - a.ctime)[0].name
+    const metaData = JSON.parse(fs.readFileSync(outputMetaFilePath, "utf-8"))
+    fs.rmSync(outputMetaFilePath)
+
+    metaData.title = metaData.title.replace(".wav", "").replace(".aif", "").replace(".flac", "")
+
+    return { audioFilePath: outputAudioPath, metaData: metaData }
 }
 
 async function execAndWaitForCMD(cmd: string): Promise<string> {
@@ -104,11 +115,13 @@ async function execAndWaitForCMD(cmd: string): Promise<string> {
     return output.trim()
 }
 
-async function postProcessFile(filePath: string) {
+async function postProcessSample(sampleData: SampleData) {
+    const filePath = sampleData.audioFilePath
+
     // CONVERT TO WAV CUS FUCKING MP3 ALWAYS HAS LIKE 2ms of start silence FFUCK MP3
     const tmpFilePath = `${filePath}_tmp.wav`
     const tmpNormalizedFilePath = `${filePath}_tmp_normalized.wav`
-    const outputFilePath = `${filePath.replace(".mp3", "").replace(".wav", "")}.wav`
+    const processedFileOutputPath = `${filePath}.wav`
 
     const createTmpFileCMD = `mv ${filePath} ${tmpFilePath}`
     await execAndWaitForCMD(createTmpFileCMD)
@@ -121,7 +134,7 @@ async function postProcessFile(filePath: string) {
     await execAndWaitForCMD(normalizeCMD)
 
     // const trimSilenceCMD = `ffmpeg -y -i ${tmpNormalizedFilePath} -af silenceremove=1:0:-50dB ${outputFilePath}`
-    const trimSilenceCMD = `ffmpeg -y -i ${tmpNormalizedFilePath} -af silenceremove=start_periods=1:start_duration=0.1:start_threshold=-50dB ${outputFilePath}`
+    const trimSilenceCMD = `ffmpeg -y -i ${tmpNormalizedFilePath} -af silenceremove=start_periods=1:start_duration=0.1:start_threshold=-50dB ${processedFileOutputPath}`
     await execAndWaitForCMD(trimSilenceCMD)
 
     const filesToCleanUp = [tmpFilePath, tmpNormalizedFilePath]
@@ -132,11 +145,11 @@ async function postProcessFile(filePath: string) {
 
     const outDest = outDir ?? ABLETON_DIR
 
-    if (!outDest) {
-        fs.mkdirSync(outDest)
+    if (!fs.existsSync(outDest)) {
+        fs.mkdirSync(outDest, { recursive: true })
     }
 
-    await execAndWaitForCMD(`cp ${outputFilePath} "${path.join(outDest, path.basename(outputFilePath))}"`)
+    await fs.copyFileSync(processedFileOutputPath, path.join(outDest, `${sampleData.metaData.title}.wav`))
 }
 
 let outDir = undefined
@@ -151,17 +164,16 @@ let outDir = undefined
     const isPack = url.includes("pack")
 
     if (isPack) {
-        
         await execAndWaitForCMD(`rm -rf ./out`)
-        await execAndWaitForCMD(`mkdir ./out`)
+        fs.mkdirSync("./out")
 
         // 'https://splice.com/sounds/packs/sample-magic/house-nation-2/samples'
 
-        const artistName = url.split("/")[5]
-        const packName = url.split("/")[6]
+        const artistName = url.replace("//", "/").split("/")[4]
+        const packName = url.replace("//", "/").split("/")[5]
         console.log("ARTIST NAME:", packName)
         console.log("PACK NAME:", packName)
-        
+
         if (!outDir) {
             outDir = path.join(ABLETON_DIR, artistName, packName)
         }
@@ -169,20 +181,9 @@ let outDir = undefined
         console.log("OUT DIR:", outDir)
 
         await downloadPack(url)
-
-        const files = glob.sync(`./out/*mp3`)
-
-        const promises = []
-        for (const file of files) {
-            promises.push(postProcessFile(file))
-        }
-        await Promise.all(promises)
     } else {
         // await downloadSample('https://splice.com/sounds/sample/2ddb9b4c76074cb1c648a85959206aa54e2893a493ea8cd2ab50b1f0bdf29786')
-        await downloadSample(url)
-
-        const mostRecentFile = getMostRecentFile("./out")
-        await postProcessFile(mostRecentFile)
+        await downloadAndPostProcessSample(url)
     }
 
     process.exit(1)

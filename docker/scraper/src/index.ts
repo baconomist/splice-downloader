@@ -3,6 +3,7 @@ import { getAllCssSelectorsFromDom, getCssSelectorFromDom, launchBrowser, waitFo
 import { spawn } from "child_process"
 import * as id3 from "node-id3"
 import * as cheerio from "cheerio"
+import fs from "fs"
 
 // const OUTPUT_DIR = '../../out'
 // const EXECUTABLE_PATH = undefined
@@ -16,6 +17,7 @@ async function downloadSample(page: Page, sampleUrl: string) {
     await page.goto(sampleUrl)
     await page.waitForNetworkIdle({ idleTime: 1000 })
 
+    const sampleId = sampleUrl.replace("//", "/").split("/")[4]
     let title = null
     const htmlContent = await page.content()
 
@@ -42,7 +44,7 @@ async function downloadSample(page: Page, sampleUrl: string) {
     // const key =
     // const tags = await page.$eval('sp-tags', e => e.)
 
-    const [recordingHandle, filePath] = startRecording(title)
+    const [recordingHandle, filePath] = startRecording(sampleId)
 
     await page.waitForNetworkIdle({ idleTime: 1000 })
     const selector = await getCssSelectorFromDom(
@@ -72,13 +74,16 @@ async function downloadSample(page: Page, sampleUrl: string) {
 
     // Wait a little bit before terminating recording to make sure we capture all the audio
     await new Promise((r) => setTimeout(r, 250))
-    stopRecording(recordingHandle, filePath, { title: title, artist: author, album: samplePack, bpm: bpm, fileUrl: sampleUrl })
+    stopRecording(recordingHandle, filePath, { title: title, artist: author, album: samplePack, bpm: bpm, fileUrl: sampleUrl, sampleId: sampleId })
 }
 
 function startRecording(fileNameWithExt: string) {
-    const filePath = OUTPUT_DIR + `/${fileNameWithExt}.mp3`
+    const filePath = OUTPUT_DIR + `/${fileNameWithExt}.wav`
 
-    return [spawn("ffmpeg", ["-f", "pulse", "-i", "virtual-capture-recorder.monitor", "-acodec", "mp3", filePath]), filePath]
+    // Outputs .wav @ 48khz (tho the actual audio might not be this quality)
+    return [spawn("ffmpeg", ["-f", "pulse", "-i", "virtual-capture-recorder.monitor", "-acodec", "pcm_s24le", "-ar", "48000", filePath]), filePath]
+
+    // return [spawn("ffmpeg", ["-f", "pulse", "-i", "virtual-capture-recorder.monitor", "-acodec", "mp3", filePath]), filePath]
 
     // return [spawn('ffmpeg', ['-f', 'pulse', '-i', 'default', filePath]), filePath]
 }
@@ -89,6 +94,7 @@ function stopRecording(recordingHandle, filePath, metaData) {
 
     // id3.write(metaData, filePath)
     // console.log(id3.read(filePath))
+    fs.writeFileSync(`${filePath}.json`, JSON.stringify(metaData))
 
     console.log("Stopped recording")
 }
