@@ -149,7 +149,8 @@ async function postProcessSample(sampleData: SampleData) {
         fs.mkdirSync(outDest, { recursive: true })
     }
 
-    await fs.copyFileSync(processedFileOutputPath, path.join(outDest, `${sampleData.metaData.title}.wav`))
+    fs.copyFileSync(processedFileOutputPath, path.join(outDest, `${sampleData.metaData.title}.wav`))
+    fs.rmSync(processedFileOutputPath)
 }
 
 let outDir = undefined
