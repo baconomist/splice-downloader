@@ -1,19 +1,22 @@
 import { Page } from "puppeteer"
-import { getAllCssSelectorsFromDom, getCssSelectorFromDom, launchBrowser, waitForCssSelectorFromDom } from "./utils"
+import { getCssSelectorFromDom, launchBrowser } from "./utils"
 import { spawn } from "child_process"
-import * as id3 from "node-id3"
 import * as cheerio from "cheerio"
 import fs from "fs"
+import yargs from "yargs"
+import { hideBin } from "yargs/helpers"
+import path from "path"
+import { getAudioLengthInMillis, waitForSilence } from "./audioUtils"
+
+const argv = yargs(hideBin(process.argv)).argv
+console.log("argv", argv)
+let RECORDING_DEVICE = undefined
 
 // const OUTPUT_DIR = '../../out'
 // const EXECUTABLE_PATH = undefined
-const EXECUTABLE_PATH = "/usr/bin/google-chrome"
-const OUTPUT_DIR = "/out"
+let OUTPUT_DIR = undefined
 
 async function downloadSample(page: Page, sampleUrl: string) {
-    // await page.goto('https://splice.com/sounds/sample/5eabcd8df2080d86acdffac638c4ca588cf1a1454f6ee6b0599189bfb2e8353f/sample-magic-house-drums-kicks-deep-house-house-tech-house-sample')
-    // const sampleUrl = 'https://splice.com/sounds/sample/2ddb9b4c76074cb1c648a85959206aa54e2893a493ea8cd2ab50b1f0bdf29786'
-    // const sampleUrl = 'https://splice.com/sounds/sample/7e830523e0fa1e64e5ef2487fe8c07cfa577a60cd5362249105d8c45978c88c0'
     await page.goto(sampleUrl)
     await page.waitForNetworkIdle({ idleTime: 1000 })
 
@@ -41,10 +44,30 @@ async function downloadSample(page: Page, sampleUrl: string) {
 
     console.log(`Sample info: Title: ${title} Bpm: ${bpm} Pack: ${samplePack} Author: ${author}`)
 
-    // const key =
-    // const tags = await page.$eval('sp-tags', e => e.)
+    const outputFilePathWithoutExt = path.resolve(path.join(OUTPUT_DIR, sampleId))
 
-    const [recordingHandle, filePath] = startRecording(sampleId)
+    // TODO: check if we even need this with the new "waitForSilence()" thing
+    // const NUM_TAKES = 6
+    // const audioTakes = []
+    // for (let i = 0; i < NUM_TAKES; i++) {
+    //     audioTakes.push(await recordSampleTake(page, sampleId, i))
+    // }
+
+    // const audioLengths = []
+    // for (let i = 0; i < NUM_TAKES; i++) {
+    //     audioLengths.push(getAudioLengthInMillis(audioTakes[i]))
+    // }
+    const takeFile = await recordSampleTake(page, sampleId, 0)
+    fs.cpSync(takeFile, outputFilePathWithoutExt + ".wav")
+    fs.rmSync(takeFile)
+
+    console.log("Writing metadata to json file...")
+    fs.writeFileSync(`${outputFilePathWithoutExt}.json`, JSON.stringify({ title: title, artist: author, album: samplePack, bpm: bpm, fileUrl: sampleUrl, sampleId: sampleId }))
+}
+
+async function recordSampleTake(page: Page, outputFilePathWithoutExt: string, sampleTake: number) {
+    const takeOutputPath = `${outputFilePathWithoutExt}_${sampleTake}.wav`
+    const recordingHandle = startRecording(takeOutputPath)
 
     await page.waitForNetworkIdle({ idleTime: 1000 })
     const selector = await getCssSelectorFromDom(
@@ -70,43 +93,92 @@ async function downloadSample(page: Page, sampleUrl: string) {
         console.log("Progress", progress)
     } while (progress > 0)
 
-    console.log("Done recording")
+    console.log("Finished sample playback")
 
     // Wait a little bit before terminating recording to make sure we capture all the audio
-    await new Promise((r) => setTimeout(r, 250))
-    stopRecording(recordingHandle, filePath, { title: title, artist: author, album: samplePack, bpm: bpm, fileUrl: sampleUrl, sampleId: sampleId })
+    await waitForSilence({ deviceName: RECORDING_DEVICE })
+
+    stopRecording(recordingHandle)
+
+    return takeOutputPath
 }
 
-function startRecording(fileNameWithExt: string) {
-    const filePath = OUTPUT_DIR + `/${fileNameWithExt}.wav`
+function startRecording(filePath: string) {
+    console.log(`Starting recording to: ${filePath}`)
 
-    // Outputs .wav @ 48khz (tho the actual audio might not be this quality)
-    return [spawn("ffmpeg", ["-f", "pulse", "-i", "virtual-capture-recorder.monitor", "-acodec", "pcm_s24le", "-ar", "48000", filePath]), filePath]
+    // NOTE: on windows Voicemeter must be setup correctly for this to work
+    // Set VoiceMeter (input) as default device, use MME output to avoid noise/grain audio issues
+    // PICK DEVICE NAME FROM:
+    // ffmpeg -list_devices true -f dshow -i dummy
+    // Make sure voicemeter outputs to both:
+    // 1. MME HEADSET
+    // 2. MME VB INPUT
 
-    // return [spawn("ffmpeg", ["-f", "pulse", "-i", "virtual-capture-recorder.monitor", "-acodec", "mp3", filePath]), filePath]
+    // Outputs .wav @ 48khz, 16-bit depth (tho the actual audio might not be this quality pretty sure splice preview is close to this quality)
+    const procHandle = argv.testMode
+        ? spawn("ffmpeg", ["-y", "-f", "dshow", "-i", RECORDING_DEVICE, "-acodec", "pcm_s24le", "-ar", "48000", filePath])
+        : spawn("ffmpeg", ["-y", "-f", "pulse", "-i", RECORDING_DEVICE, "-acodec", "pcm_s24le", "-ar", "48000", filePath])
 
-    // return [spawn('ffmpeg', ['-f', 'pulse', '-i', 'default', filePath]), filePath]
+    let stdout = ""
+    procHandle.stdout.on("data", (msg) => {
+        stdout += msg.toString()
+    })
+
+    let stderr = ""
+    procHandle.stderr.on("data", (err) => {
+        stderr += err.toString()
+    })
+
+    procHandle.on("close", () => {
+        console.log(stdout)
+        if (stderr.length > 0) {
+            console.error("FFMPEG ERROR:", stderr)
+            process.exit(1)
+        }
+    })
+
+    return procHandle
 }
 
-function stopRecording(recordingHandle, filePath, metaData) {
+function stopRecording(recordingHandle) {
+    console.log("Stopping recording...")
+
     // send interrupt to stop recording
     recordingHandle.kill("SIGINT")
-
-    // id3.write(metaData, filePath)
-    // console.log(id3.read(filePath))
-    fs.writeFileSync(`${filePath}.json`, JSON.stringify(metaData))
 
     console.log("Stopped recording")
 }
 
 ;(async () => {
-    // const [browser, page] = await launchBrowser({ withProxy: false, optimized: false, headless: false })
-    const [browser, page] = await launchBrowser({ withProxy: false, optimized: false, args: ["--use-fake-ui-for-media-stream"], ignoreDefaultArgs: ["--mute-audio"], headless: "new", executablePath: EXECUTABLE_PATH })
+    let [browser, page] = [undefined, undefined]
+    if (argv.testMode) {
+        RECORDING_DEVICE = "audio=CABLE Output (VB-Audio Virtual Cable)"
+        // ENV FOR LOCAL TESTING
+        OUTPUT_DIR = "./out"
+        console.log("Executing in TEST mode")
 
-    await downloadSample(page, process.argv[2])
+        if (!fs.existsSync(OUTPUT_DIR)) {
+            fs.mkdirSync(OUTPUT_DIR)
+        }
 
-    await browser.close()
-    // process.exit(1)
+        ;[browser, page] = await launchBrowser({ withProxy: false, optimized: false, headless: false })
+        await downloadSample(page, process.argv[2])
+        console.log("Finished")
+        await new Promise((r) => setTimeout(r, 99999))
+        await browser.close()
+        process.exit(1)
+    } else {
+        // ENV FOR DOCKER
+        RECORDING_DEVICE = "virtual-capture-recorder.monitor"
+        OUTPUT_DIR = "/out"
+        const EXECUTABLE_PATH = "/usr/bin/google-chrome"
 
-    // await new Promise(r => setTimeout(r, 99999))
+        if (!fs.existsSync(OUTPUT_DIR)) {
+            fs.mkdirSync(OUTPUT_DIR)
+        }
+
+        ;[browser, page] = await launchBrowser({ withProxy: false, optimized: false, args: ["--use-fake-ui-for-media-stream"], ignoreDefaultArgs: ["--mute-audio"], headless: "new", executablePath: EXECUTABLE_PATH })
+        await downloadSample(page, process.argv[2])
+        await browser.close()
+    }
 })()

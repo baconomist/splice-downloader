@@ -31,3 +31,12 @@ If you've got spare change, any donations would be greatly appreciated :)
 - instantly trim audio after each individual sample download from the pack --> move audio trimming into docker container
 - show progress % for pack download
 - argv: --num-procs x --> for # of parallel
+
+
+## TODO: audio content checker
+sometimes the downloaded audio file is empty or it doesnt actually capture the entire recording
+we need a way to:
+- verify the length of the file within a given percentage
+- verify the file isnt empty
+
+if either is true, re-download

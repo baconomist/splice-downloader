@@ -137,12 +137,6 @@ async function postProcessSample(sampleData: SampleData) {
     const trimSilenceCMD = `ffmpeg -y -i ${tmpNormalizedFilePath} -af silenceremove=start_periods=1:start_duration=0.1:start_threshold=-50dB ${processedFileOutputPath}`
     await execAndWaitForCMD(trimSilenceCMD)
 
-    const filesToCleanUp = [tmpFilePath, tmpNormalizedFilePath]
-
-    for (const file of filesToCleanUp) {
-        await execAndWaitForCMD(`rm -rf ${file}`)
-    }
-
     const outDest = outDir ?? ABLETON_DIR
 
     if (!fs.existsSync(outDest)) {
@@ -150,7 +144,12 @@ async function postProcessSample(sampleData: SampleData) {
     }
 
     fs.copyFileSync(processedFileOutputPath, path.join(outDest, `${sampleData.metaData.title}.wav`))
-    fs.rmSync(processedFileOutputPath)
+    
+    const filesToCleanUp = [tmpFilePath, tmpNormalizedFilePath, processedFileOutputPath]
+
+    for (const file of filesToCleanUp) {
+        fs.rmSync(file)
+    }
 }
 
 let outDir = undefined
