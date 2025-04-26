@@ -66,7 +66,7 @@ async function downloadSample(sampleUrl: string): Promise<SampleData> {
 
     const sampleId = sampleUrl.replace("//", "/").split("/")[4]
     const outputAudioPath = `./out/${sampleId}.wav`
-    const outputMetaFilePath = `./out/${sampleId}.wav.json`
+    const outputMetaFilePath = `./out/${sampleId}.json`
 
     function onExecComplete(err, stdout, stderr) {
         success = !err
