@@ -134,7 +134,7 @@ async function postProcessSample(sampleData: SampleData) {
     await execAndWaitForCMD(normalizeCMD)
 
     // const trimSilenceCMD = `ffmpeg -y -i ${tmpNormalizedFilePath} -af silenceremove=1:0:-50dB ${outputFilePath}`
-    const trimSilenceCMD = `ffmpeg -y -i ${tmpNormalizedFilePath} -af silenceremove=start_periods=1:start_duration=0.1:start_threshold=-50dB ${processedFileOutputPath}`
+    const trimSilenceCMD = `ffmpeg -y -i ${tmpNormalizedFilePath} -af silenceremove=start_periods=1:start_duration=0.1:start_threshold=-50dB:stop_periods=1:stop_duration=0.1:stop_threshold=-50dB ${processedFileOutputPath}`
     await execAndWaitForCMD(trimSilenceCMD)
 
     const outDest = outDir ?? ABLETON_DIR
@@ -145,7 +145,7 @@ async function postProcessSample(sampleData: SampleData) {
 
     fs.copyFileSync(processedFileOutputPath, path.join(outDest, `${sampleData.metaData.title}.wav`))
     
-    const filesToCleanUp = [tmpFilePath, tmpNormalizedFilePath, processedFileOutputPath]
+    const filesToCleanUp = [tmpFilePath, tmpNormalizedFilePath]
 
     for (const file of filesToCleanUp) {
         fs.rmSync(file)
