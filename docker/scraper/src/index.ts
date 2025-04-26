@@ -50,14 +50,14 @@ async function downloadSample(page: Page, sampleUrl: string) {
     // const NUM_TAKES = 6
     // const audioTakes = []
     // for (let i = 0; i < NUM_TAKES; i++) {
-    //     audioTakes.push(await recordSampleTake(page, sampleId, i))
+    //     audioTakes.push(await recordSampleTake(page, outputFilePathWithoutExt, i))
     // }
 
     // const audioLengths = []
     // for (let i = 0; i < NUM_TAKES; i++) {
     //     audioLengths.push(getAudioLengthInMillis(audioTakes[i]))
     // }
-    const takeFile = await recordSampleTake(page, sampleId, 0)
+    const takeFile = await recordSampleTake(page, outputFilePathWithoutExt, 0)
     fs.cpSync(takeFile, outputFilePathWithoutExt + ".wav")
     fs.rmSync(takeFile)
 
