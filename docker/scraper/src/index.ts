@@ -98,7 +98,7 @@ async function recordSampleTake(page: Page, outputFilePathWithoutExt: string, sa
     // Wait a little bit before terminating recording to make sure we capture all the audio
     await waitForSilence({ deviceName: RECORDING_DEVICE })
 
-    stopRecording(recordingHandle)
+    await stopRecording(recordingHandle)
 
     return takeOutputPath
 }
@@ -131,20 +131,23 @@ function startRecording(filePath: string) {
 
     procHandle.on("close", () => {
         console.log(stdout)
-        if (stderr.length > 0) {
+        if (stderr.trim().length > 0) {
             console.error("FFMPEG ERROR:", stderr)
-            process.exit(1)
+            console.log("FFMPEG ERROR ^^^ (MIGHT NOT BE ERROR IF SUCCESSFUL RECORDING CUS WE KILL WITH SIGINT)")
         }
     })
 
     return procHandle
 }
 
-function stopRecording(recordingHandle) {
+async function stopRecording(recordingHandle) {
     console.log("Stopping recording...")
 
     // send interrupt to stop recording
     recordingHandle.kill("SIGINT")
+
+    // Give time for ffmpeg to exit
+    await new Promise(r => setTimeout(r, 500))
 
     console.log("Stopped recording")
 }
