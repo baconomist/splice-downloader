@@ -6,7 +6,7 @@ import fs from "fs"
 import yargs from "yargs"
 import { hideBin } from "yargs/helpers"
 import path from "path"
-import { getAudioLengthInMillis, waitForSilence } from "./audioUtils"
+import { getAudioLengthInMillis, isEntireAudioSilent, waitForSilence } from "./audioUtils"
 
 const argv = yargs(hideBin(process.argv)).argv
 console.log("argv", argv)
@@ -57,7 +57,12 @@ async function downloadSample(page: Page, sampleUrl: string) {
     // for (let i = 0; i < NUM_TAKES; i++) {
     //     audioLengths.push(getAudioLengthInMillis(audioTakes[i]))
     // }
-    const takeFile = await recordSampleTake(page, outputFilePathWithoutExt, 0)
+    
+    let takeFile
+    do {
+        takeFile = await recordSampleTake(page, outputFilePathWithoutExt, 0)
+    } while (await isEntireAudioSilent(takeFile))
+
     fs.cpSync(takeFile, outputFilePathWithoutExt + ".wav")
     fs.rmSync(takeFile)
 
@@ -147,7 +152,7 @@ async function stopRecording(recordingHandle) {
     recordingHandle.kill("SIGINT")
 
     // Give time for ffmpeg to exit
-    await new Promise(r => setTimeout(r, 500))
+    await new Promise((r) => setTimeout(r, 500))
 
     console.log("Stopped recording")
 }
