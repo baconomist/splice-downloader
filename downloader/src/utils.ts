@@ -137,8 +137,7 @@ export async function scrollIntoView(page: Page, selector: string) {
 import fs from "fs"
 import path from "path"
 
-export function getAllFiles(dirPath, fileExt) {
-    const arrayOfFiles = []
+export function getAllFiles(dirPath, fileExt, arrayOfFiles=[]) {
     const files = fs.readdirSync(dirPath);
 
     for (const file of files) {
@@ -146,7 +145,7 @@ export function getAllFiles(dirPath, fileExt) {
         const stat = fs.statSync(fullPath);
 
         if (stat.isDirectory()) {
-            getAllFiles(fullPath, arrayOfFiles); // Recurse into subdirectory
+            getAllFiles(fullPath, fileExt, arrayOfFiles); // Recurse into subdirectory
         } else if(path.basename(file).endsWith(fileExt)) {
             arrayOfFiles.push(fullPath);
         }

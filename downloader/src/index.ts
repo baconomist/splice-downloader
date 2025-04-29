@@ -185,21 +185,6 @@ async function postProcessSample(sampleData: SampleData) {
 
 let outDir = undefined
 ;(async () => {
-    // TODO: read/write from a db file cus this will probably get super slow
-    const downloadCacheFiles = getAllFiles(ABLETON_DIR, ".wav")
-    for (const file of downloadCacheFiles) {
-        const res = await mm.parseFile(file)
-        if (res.common && res.common.comment) {
-            const { sampleId, fileUrl } = JSON.parse(res.common.comment[0].text)
-            const meta = { title: res.common.title, album: res.common.album, artist: res.common.artist, sampleId: sampleId, fileUrl: fileUrl }
-            if (!isEntireAudioSilent(file)) {
-                alreadyDownloadedCache[sampleId] = meta
-            }
-        }
-    }
-
-    console.log(`Download cache: ${downloadCacheFiles.length} files`)
-
     // TODO: require to run this as SUDO
 
     const url = process.argv[2]
@@ -210,10 +195,11 @@ let outDir = undefined
     const isPack = url.includes("pack")
 
     if (isPack) {
-        await execAndWaitForCMD(`rm -rf ./out`)
-        if (!fs.existsSync("./out")) {
-            fs.mkdirSync("./out")
+        if (fs.existsSync("./out")) {
+            fs.rmSync("./out", { force: true, recursive: true })
         }
+
+        fs.mkdirSync("./out")
 
         // 'https://splice.com/sounds/packs/sample-magic/house-nation-2/samples'
 
@@ -227,6 +213,23 @@ let outDir = undefined
         }
 
         console.log("OUT DIR:", outDir)
+
+        // TODO: read/write from a db file cus this will probably get super slow
+        console.log("Reading downloaded files...")
+        const downloadCacheFiles = getAllFiles(outDir, ".wav")
+        for (const file of downloadCacheFiles) {
+            const res = await mm.parseFile(file)
+            if (res.common && res.common.comment) {
+                const { sampleId, fileUrl } = JSON.parse(res.common.comment[0].text)
+                const meta = { title: res.common.title, album: res.common.album, artist: res.common.artist, sampleId: sampleId, fileUrl: fileUrl }
+                if (!(await isEntireAudioSilent(file))) {
+                    alreadyDownloadedCache[sampleId] = meta
+                }
+            }
+        }
+
+        console.log(`Download cache: ${Object.keys(alreadyDownloadedCache).length} files`)
+        // console.log(alreadyDownloadedCache)
 
         await downloadPack(url)
     } else {
