@@ -77,8 +77,13 @@ async function downloadPack(packUrl: string) {
 type SampleData = { audioFilePath: string; metaData: { title: string; artist: string } & any }
 
 async function downloadAndPostProcessSample(sampleUrl: string) {
-    const downloadedSample = await downloadSample(sampleUrl)
-    await postProcessSample(downloadedSample)
+    try {
+        const downloadedSample = await downloadSample(sampleUrl)
+        await postProcessSample(downloadedSample)
+    } catch (e) {
+        // Sometimes this fails if file is busy etc, then we skip and continue downloading the rest of pack
+        console.error(e)
+    }
 }
 
 async function downloadSample(sampleUrl: string): Promise<SampleData> {
@@ -223,6 +228,7 @@ let outDir = undefined
                 const { sampleId, fileUrl } = JSON.parse(res.common.comment[0].text)
                 const meta = { title: res.common.title, album: res.common.album, artist: res.common.artist, sampleId: sampleId, fileUrl: fileUrl }
                 if (!(await isEntireAudioSilent(file))) {
+                    // Only inclde in download cache if file has meta and is not empty
                     alreadyDownloadedCache[sampleId] = meta
                 }
             }
