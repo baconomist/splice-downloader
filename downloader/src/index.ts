@@ -24,6 +24,7 @@ async function downloadPack(packUrl: string) {
 
     let sampleUrls = []
     async function inner(pageNumber = 1) {
+        console.log(`Extracting sample urls... page: ${page}`)
         await page.goto(`${packUrl}?page=${pageNumber}`, { waitUntil: ["domcontentloaded", "networkidle2"] })
 
         await page.waitForSelector('a[href^="https://splice.com/sounds/sample/"]')
@@ -34,7 +35,7 @@ async function downloadPack(packUrl: string) {
 
         for (const link of sampleLinks) {
             const sampleUrl = await link.evaluate((el) => el.href)
-            console.log(sampleUrl)
+            // console.log(sampleUrl)
             sampleUrls.push(sampleUrl)
         }
 
@@ -63,15 +64,16 @@ async function downloadPack(packUrl: string) {
                 const first = await Promise.race(runningProcs)
                 runningProcs.splice(runningProcs.indexOf(first), 1)
             }
+            numSamplesDownloaded++
+            bar.update(numSamplesDownloaded)
         } else {
             console.log(`Skipping ${sampleId}, already downloaded.`)
         }
-
-        numSamplesDownloaded++
-        bar.update(numSamplesDownloaded)
     }
 
     await Promise.all(runningProcs)
+
+    console.log(`Finished downloading: ${numSamplesDownloaded}/${sampleUrls.length} samples`)
 }
 
 type SampleData = { audioFilePath: string; metaData: { title: string; artist: string } & any }
@@ -188,6 +190,20 @@ async function postProcessSample(sampleData: SampleData) {
     }
 }
 
+async function verifyDownloadedFilesArentEmpty(dirPath: string) {
+    console.log(`Verifying downloaded files at ${dirPath}`)
+
+    const downloadedFiles = getAllFiles(dirPath, ".wav")
+
+    for(const file of downloadedFiles) {
+        if(await isEntireAudioSilent(file)) {
+            console.error(`File: ${file} is empty`)
+        }
+    }
+
+    console.log("Looks good!")
+}
+
 let outDir = undefined
 ;(async () => {
     // TODO: require to run this as SUDO
@@ -230,6 +246,7 @@ let outDir = undefined
                 if (!(await isEntireAudioSilent(file))) {
                     // Only inclde in download cache if file has meta and is not empty
                     alreadyDownloadedCache[sampleId] = meta
+                    numSamplesDownloaded++;
                 }
             }
         }
@@ -238,6 +255,7 @@ let outDir = undefined
         // console.log(alreadyDownloadedCache)
 
         await downloadPack(url)
+        await verifyDownloadedFilesArentEmpty(outDir)
     } else {
         // await downloadSample('https://splice.com/sounds/sample/2ddb9b4c76074cb1c648a85959206aa54e2893a493ea8cd2ab50b1f0bdf29786')
         await downloadAndPostProcessSample(url)
