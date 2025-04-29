@@ -5,6 +5,11 @@ import { spawnSync, execSync, exec } from "child_process"
 import * as id3 from "node-id3"
 import path from "path"
 import fs from "fs"
+import cliProgress from "cli-progress"
+
+// Create a new progress bar instance and use shades_classic theme
+const bar = new cliProgress.SingleBar({}, cliProgress.Presets.shades_classic)
+let numSamplesDownloaded = 0
 
 const ABLETON_DIR = `C:\\Users\\Lucas\\Documents\\Ableton\\User Library\\Samples\\Splice`
 
@@ -39,6 +44,9 @@ async function downloadPack(packUrl: string) {
 
     await browser.close()
 
+    // Start the progress bar with a total value of 100 and start value of 0
+    bar.start(sampleUrls.length, 0)
+
     const NUM_PROCS = 1
     let runningProcs = []
     for (const sampleUrl of sampleUrls) {
@@ -57,6 +65,9 @@ type SampleData = { audioFilePath: string; metaData: { title: string; artist: st
 async function downloadAndPostProcessSample(sampleUrl: string) {
     const downloadedSample = await downloadSample(sampleUrl)
     await postProcessSample(downloadedSample)
+
+    numSamplesDownloaded++
+    bar.update(numSamplesDownloaded)
 }
 
 async function downloadSample(sampleUrl: string): Promise<SampleData> {
@@ -121,6 +132,7 @@ async function postProcessSample(sampleData: SampleData) {
     // CONVERT TO WAV CUS FUCKING MP3 ALWAYS HAS LIKE 2ms of start silence FFUCK MP3
     const tmpFilePath = `${filePath}_tmp.wav`
     const tmpNormalizedFilePath = `${filePath}_tmp_normalized.wav`
+    const tmpWithoutMetaFilePath = `${filePath}_noMeta.wav`
     const processedFileOutputPath = `${filePath}.wav`
 
     const createTmpFileCMD = `mv ${filePath} ${tmpFilePath}`
@@ -134,8 +146,13 @@ async function postProcessSample(sampleData: SampleData) {
     await execAndWaitForCMD(normalizeCMD)
 
     // const trimSilenceCMD = `ffmpeg -y -i ${tmpNormalizedFilePath} -af silenceremove=1:0:-50dB ${outputFilePath}`
-    const trimSilenceCMD = `ffmpeg -y -i ${tmpNormalizedFilePath} -af silenceremove=start_periods=1:start_duration=0.1:start_threshold=-50dB:stop_periods=1:stop_duration=0.1:stop_threshold=-50dB ${processedFileOutputPath}`
+    const trimSilenceCMD = `ffmpeg -y -i ${tmpNormalizedFilePath} -af silenceremove=start_periods=1:start_duration=0.1:start_threshold=-50dB:stop_periods=1:stop_duration=0.1:stop_threshold=-50dB ${tmpWithoutMetaFilePath}`
     await execAndWaitForCMD(trimSilenceCMD)
+
+    const { artist, title, album, sampleId, fileUrl } = sampleData.metaData
+
+    const ffmpegWriteMetaCMD = [`ffmpeg -y -i ${tmpWithoutMetaFilePath}`, `-metadata artist="${artist}"`, `-metadata title="${title}"`, `-metadata album="${album}"`, `-metadata comment="sampleId=${sampleId}; url=${fileUrl}"`, `${processedFileOutputPath}`].join(" ")
+    await execAndWaitForCMD(ffmpegWriteMetaCMD)
 
     const outDest = outDir ?? ABLETON_DIR
 
@@ -144,8 +161,8 @@ async function postProcessSample(sampleData: SampleData) {
     }
 
     fs.copyFileSync(processedFileOutputPath, path.join(outDest, `${sampleData.metaData.title}.wav`))
-    
-    const filesToCleanUp = [tmpFilePath, tmpNormalizedFilePath]
+
+    const filesToCleanUp = [tmpFilePath, tmpNormalizedFilePath, tmpWithoutMetaFilePath]
 
     for (const file of filesToCleanUp) {
         fs.rmSync(file)

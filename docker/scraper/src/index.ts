@@ -7,6 +7,7 @@ import yargs from "yargs"
 import { hideBin } from "yargs/helpers"
 import path from "path"
 import { getAudioLengthInMillis, isEntireAudioSilent, waitForSilence } from "./audioUtils"
+import cliProgress from "cli-progress"
 
 const argv = yargs(hideBin(process.argv)).argv
 console.log("argv", argv)
@@ -57,7 +58,7 @@ async function downloadSample(page: Page, sampleUrl: string) {
     // for (let i = 0; i < NUM_TAKES; i++) {
     //     audioLengths.push(getAudioLengthInMillis(audioTakes[i]))
     // }
-    
+
     let takeFile
     do {
         takeFile = await recordSampleTake(page, outputFilePathWithoutExt, 0)
@@ -86,17 +87,25 @@ async function recordSampleTake(page: Page, outputFilePathWithoutExt: string, sa
     const progressSelector = 'progress[class*="progress-bar"]'
     await page.waitForSelector(progressSelector)
 
+    // Create a new progress bar instance and use shades_classic theme
+    const bar = new cliProgress.SingleBar({}, cliProgress.Presets.shades_classic)
+
+    // Start the progress bar with a total value of 100 and start value of 0
+    bar.start(1, 0)
+
     // Progress bar resets back to 0 when sample finished playing
     let progress = 0
     do {
         progress = parseFloat(await page.$eval(progressSelector, (e) => e.getAttribute("value")))
-        console.log("Progress", progress)
+        bar.update(progress)
     } while (progress <= 0)
 
     do {
         progress = parseFloat(await page.$eval(progressSelector, (e) => e.getAttribute("value")))
-        console.log("Progress", progress)
+        bar.update(progress)
     } while (progress > 0)
+
+    bar.stop()
 
     console.log("Finished sample playback")
 
