@@ -24,7 +24,7 @@ async function downloadPack(packUrl: string) {
 
     let sampleUrls = []
     async function inner(pageNumber = 1) {
-        console.log(`Extracting sample urls... page: ${page}`)
+        console.log(`Extracting sample urls... page: ${pageNumber}`)
         await page.goto(`${packUrl}?page=${pageNumber}`, { waitUntil: ["domcontentloaded", "networkidle2"] })
 
         await page.waitForSelector('a[href^="https://splice.com/sounds/sample/"]')
