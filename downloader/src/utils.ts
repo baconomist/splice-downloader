@@ -133,3 +133,24 @@ export async function scrollIntoView(page: Page, selector: string) {
         await page.$eval(selector, elem => elem.scrollIntoView())
     }
 }
+
+import fs from "fs"
+import path from "path"
+
+export function getAllFiles(dirPath, fileExt) {
+    const arrayOfFiles = []
+    const files = fs.readdirSync(dirPath);
+
+    for (const file of files) {
+        const fullPath = path.join(dirPath, file);
+        const stat = fs.statSync(fullPath);
+
+        if (stat.isDirectory()) {
+            getAllFiles(fullPath, arrayOfFiles); // Recurse into subdirectory
+        } else if(path.basename(file).endsWith(fileExt)) {
+            arrayOfFiles.push(fullPath);
+        }
+    }
+
+    return arrayOfFiles;
+}

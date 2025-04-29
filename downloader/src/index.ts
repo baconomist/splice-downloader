@@ -1,17 +1,22 @@
 import glob from "glob"
 import { Page } from "puppeteer"
-import { getAllCssSelectorsFromDom, getCssSelectorFromDom, launchBrowser, scrollElemIntoView, scrollIntoView, waitForCssSelectorFromDom } from "./utils"
+import { getAllCssSelectorsFromDom, getAllFiles, getCssSelectorFromDom, launchBrowser, scrollElemIntoView, scrollIntoView, waitForCssSelectorFromDom } from "./utils"
 import { spawnSync, execSync, exec } from "child_process"
 import * as id3 from "node-id3"
 import path from "path"
 import fs from "fs"
 import cliProgress from "cli-progress"
+import { isEntireAudioSilent } from "./audioUtils"
+// import { parseFile } from "music-metadata"
+import * as mm from "music-metadata"
 
 // Create a new progress bar instance and use shades_classic theme
 const bar = new cliProgress.SingleBar({}, cliProgress.Presets.shades_classic)
 let numSamplesDownloaded = 0
 
 const ABLETON_DIR = `C:\\Users\\Lucas\\Documents\\Ableton\\User Library\\Samples\\Splice`
+
+const alreadyDownloadedCache = {}
 
 async function downloadPack(packUrl: string) {
     console.log("Downloading Pack...")
@@ -50,6 +55,12 @@ async function downloadPack(packUrl: string) {
     const NUM_PROCS = 1
     let runningProcs = []
     for (const sampleUrl of sampleUrls) {
+        const sampleId = sampleUrl.replace("//", "/").split("/")[4]
+        if (sampleId in alreadyDownloadedCache) {
+            console.log(`Skipping ${sampleId}, already downloaded.`)
+            continue
+        }
+
         runningProcs.push(downloadAndPostProcessSample(sampleUrl))
         if (runningProcs.length >= NUM_PROCS) {
             const first = await Promise.race(runningProcs)
@@ -151,7 +162,10 @@ async function postProcessSample(sampleData: SampleData) {
 
     const { artist, title, album, sampleId, fileUrl } = sampleData.metaData
 
-    const ffmpegWriteMetaCMD = [`ffmpeg -y -i ${tmpWithoutMetaFilePath}`, `-metadata artist="${artist}"`, `-metadata title="${title}"`, `-metadata album="${album}"`, `-metadata comment="sampleId=${sampleId}; url=${fileUrl}"`, `${processedFileOutputPath}`].join(" ")
+    // Comment with quotes escaped
+    const ICMTJson = JSON.stringify({ sampleId: sampleId, fileUrl: fileUrl }).replace(/"/g, '\\"')
+
+    const ffmpegWriteMetaCMD = [`ffmpeg -y -i ${tmpWithoutMetaFilePath}`, `-metadata artist="${artist}"`, `-metadata title="${title}"`, `-metadata album="${album}"`, `-metadata comment="${ICMTJson}"`, `${processedFileOutputPath}`].join(" ")
     await execAndWaitForCMD(ffmpegWriteMetaCMD)
 
     const outDest = outDir ?? ABLETON_DIR
@@ -171,6 +185,21 @@ async function postProcessSample(sampleData: SampleData) {
 
 let outDir = undefined
 ;(async () => {
+    // TODO: read/write from a db file cus this will probably get super slow
+    const downloadCacheFiles = getAllFiles(ABLETON_DIR, ".wav")
+    for (const file of downloadCacheFiles) {
+        const res = await mm.parseFile(file)
+        if (res.common && res.common.comment) {
+            const { sampleId, fileUrl } = JSON.parse(res.common.comment[0].text)
+            const meta = { title: res.common.title, album: res.common.album, artist: res.common.artist, sampleId: sampleId, fileUrl: fileUrl }
+            if (!isEntireAudioSilent(file)) {
+                alreadyDownloadedCache[sampleId] = meta
+            }
+        }
+    }
+
+    console.log(`Download cache: ${downloadCacheFiles.length} files`)
+
     // TODO: require to run this as SUDO
 
     const url = process.argv[2]
@@ -182,7 +211,9 @@ let outDir = undefined
 
     if (isPack) {
         await execAndWaitForCMD(`rm -rf ./out`)
-        fs.mkdirSync("./out")
+        if (!fs.existsSync("./out")) {
+            fs.mkdirSync("./out")
+        }
 
         // 'https://splice.com/sounds/packs/sample-magic/house-nation-2/samples'
 

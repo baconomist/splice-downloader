@@ -1,6 +1,6 @@
 {
   "scripts": {
-    "dev": "npx ts-node src/index.ts"
+    "dev": "tsx src/index.ts"
   },
   "dependencies": {
     "@googlemaps/google-maps-services-js": "^3.3.41",
@@ -9,6 +9,7 @@
     "cli-progress": "^3.12.0",
     "fs": "^0.0.1-security",
     "install": "^0.13.0",
+    "music-metadata": "^11.2.1",
     "node-id3": "^0.2.6",
     "npm": "^10.4.0",
     "prompts": "^2.4.2",
