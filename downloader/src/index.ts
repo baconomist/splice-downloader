@@ -56,16 +56,19 @@ async function downloadPack(packUrl: string) {
     let runningProcs = []
     for (const sampleUrl of sampleUrls) {
         const sampleId = sampleUrl.replace("//", "/").split("/")[4]
-        if (sampleId in alreadyDownloadedCache) {
+        const sampleAlreadyDownloaded = sampleId in alreadyDownloadedCache
+        if (!sampleAlreadyDownloaded) {
+            runningProcs.push(downloadAndPostProcessSample(sampleUrl))
+            if (runningProcs.length >= NUM_PROCS) {
+                const first = await Promise.race(runningProcs)
+                runningProcs.splice(runningProcs.indexOf(first), 1)
+            }
+        } else {
             console.log(`Skipping ${sampleId}, already downloaded.`)
-            continue
         }
 
-        runningProcs.push(downloadAndPostProcessSample(sampleUrl))
-        if (runningProcs.length >= NUM_PROCS) {
-            const first = await Promise.race(runningProcs)
-            runningProcs.splice(runningProcs.indexOf(first), 1)
-        }
+        numSamplesDownloaded++
+        bar.update(numSamplesDownloaded)
     }
 
     await Promise.all(runningProcs)
@@ -76,9 +79,6 @@ type SampleData = { audioFilePath: string; metaData: { title: string; artist: st
 async function downloadAndPostProcessSample(sampleUrl: string) {
     const downloadedSample = await downloadSample(sampleUrl)
     await postProcessSample(downloadedSample)
-
-    numSamplesDownloaded++
-    bar.update(numSamplesDownloaded)
 }
 
 async function downloadSample(sampleUrl: string): Promise<SampleData> {
