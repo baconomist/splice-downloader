@@ -138,6 +138,10 @@ import fs from "fs"
 import path from "path"
 
 export function getAllFiles(dirPath, fileExt, arrayOfFiles=[]) {
+    if (!fs.existsSync(dirPath)) {
+        return []
+    }
+
     const files = fs.readdirSync(dirPath);
 
     for (const file of files) {

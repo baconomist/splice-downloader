@@ -54,8 +54,14 @@ async function downloadPack(packUrl: string) {
     bar.start(sampleUrls.length, 0)
 
     const NUM_PROCS = 1
+    const MAX_SAFE_PROCS = 3
+
     let runningProcs = []
     for (const sampleUrl of sampleUrls) {
+        if (runningProcs.length >= MAX_SAFE_PROCS) {
+            throw new Error("AAAAAAAAAAAAAAA!")
+        }
+
         const sampleId = sampleUrl.replace("//", "/").split("/")[4]
         const sampleAlreadyDownloaded = sampleId in alreadyDownloadedCache
         if (!sampleAlreadyDownloaded) {
@@ -216,11 +222,11 @@ let outDir = undefined
     const isPack = url.includes("pack")
 
     if (isPack) {
-        if (fs.existsSync("./out")) {
-            fs.rmSync("./out", { force: true, recursive: true })
-        }
+        // if (fs.existsSync("./out")) {
+        //     fs.rmSync("./out", { force: true, recursive: true })
+        // }
 
-        fs.mkdirSync("./out")
+        // fs.mkdirSync("./out")
 
         // 'https://splice.com/sounds/packs/sample-magic/house-nation-2/samples'
 
